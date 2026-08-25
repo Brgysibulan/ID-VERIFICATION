@@ -99,9 +99,29 @@ async function verify(control){
   }
 }
 
+function cameraErrorMessage(error){
+  const name=error?.name||'UnknownError';
+  if(name==='NotAllowedError'||name==='PermissionDeniedError'){
+    return 'Camera permission is blocked. In Chrome, open the site settings from the address bar → Camera → Allow, then reload this page.';
+  }
+  if(name==='NotFoundError'||name==='DevicesNotFoundError'){
+    return 'No camera was found. Check that your phone/laptop has a camera available.';
+  }
+  if(name==='NotReadableError'||name==='TrackStartError'){
+    return 'The camera is busy or unavailable. Close Zoom, Meet, Messenger, Camera, or other apps using the camera, then try again.';
+  }
+  if(name==='SecurityError'){
+    return 'The browser blocked camera access for security reasons. Open this site directly over HTTPS in Chrome.';
+  }
+  if(name==='AbortError'){
+    return 'Camera startup was interrupted. Close other camera apps and tap Scan again.';
+  }
+  return `Camera could not start (${name}). ${error?.message||'Check the browser camera permission and try again.'}`;
+}
+
 async function startScanner(){
   scannerCard.classList.remove('hidden');
-  scannerMessage.textContent='Allow camera access when the browser asks.';
+  scannerMessage.textContent='Requesting camera permission…';
 
   if(!window.isSecureContext){
     scannerMessage.textContent='Camera requires HTTPS. Open the GitHub Pages link directly in Chrome.';
@@ -112,15 +132,15 @@ async function startScanner(){
     return;
   }
   if(!window.Html5Qrcode){
-    scannerMessage.textContent='QR scanner is still loading. Please tap Scan again.';
+    scannerMessage.textContent='QR scanner is still loading. Please wait a moment and tap Scan again.';
     return;
   }
 
   scanner=scanner||new Html5Qrcode('reader');
   try{
-    // Calling getUserMedia directly here makes Chrome show its native
-    // "Allow camera" permission prompt when permission has not been set.
-    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});
+    // This explicit request is intentionally inside the Scan button click.
+    // Chrome/Android can show its native camera permission prompt here.
+    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
     stream.getTracks().forEach(track=>track.stop());
 
     await scanner.start(
@@ -139,13 +159,8 @@ async function startScanner(){
     scannerRunning=true;
     scannerMessage.textContent='Point the rear camera at the ID QR code.';
   }catch(error){
-    if(error?.name==='NotAllowedError'){
-      scannerMessage.textContent='Camera access was blocked. Tap the camera icon in Chrome address bar → Allow, then tap Scan again.';
-    }else if(error?.name==='NotFoundError'){
-      scannerMessage.textContent='No camera was found on this device.';
-    }else{
-      scannerMessage.textContent='Camera could not start. Allow camera access for this site and try again.';
-    }
+    scannerMessage.textContent=cameraErrorMessage(error);
+    console.error('Camera error:',error);
   }
 }
 
