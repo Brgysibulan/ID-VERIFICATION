@@ -1,94 +1,18 @@
 const API_URL='https://script.google.com/macros/s/AKfycbzFOY5ul78Q-VOrb_-eXUKjiQdFvv1bckhJ-GQL3EqEB87KgyYHbPTguIX8OepgWUUKkg/exec';
-
 const $=id=>document.getElementById(id);
-const searchForm=$('searchForm'),controlInput=$('controlInput'),scanBtn=$('scanBtn'),scannerCard=$('scannerCard'),closeScanner=$('closeScanner'),scannerMessage=$('scannerMessage');
-const resultCard=$('resultCard'),statusBadge=$('statusBadge'),resultTitle=$('resultTitle'),resultMessage=$('resultMessage'),details=$('details'),verifyAnother=$('verifyAnother');
-let scanner=null,scannerRunning=false,scanLocked=false;
-
+const searchForm=$('searchForm'),controlInput=$('controlInput'),scanBtn=$('scanBtn'),scannerCard=$('scannerCard'),closeScanner=$('closeScanner'),scannerMessage=$('scannerMessage'),resultCard=$('resultCard'),statusBadge=$('statusBadge'),resultTitle=$('resultTitle'),resultMessage=$('resultMessage'),details=$('details'),verifyAnother=$('verifyAnother'),video=$('cameraVideo');
+let cameraStream=null,scannerRunning=false,scanLocked=false,barcodeDetector=null,detectorTimer=null,scannerFallback=null;
 const normalize=v=>String(v??'').trim();
 function escapeHtml(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
-
-function parseDate(record){
- const month=normalize(record['EXPIRATION DATE MONTH']||record['EXPIRATION MONTH']),day=normalize(record['EXPIRATION DATE DAY']||record['EXPIRATION DAY']),year=normalize(record['EXPIRATION DATE YEAR']||record['EXPIRATION YEAR']);
- if(!month||!day||!year)return null;
- const months={JANUARY:0,FEBRUARY:1,MARCH:2,APRIL:3,MAY:4,JUNE:5,JULY:6,AUGUST:7,SEPTEMBER:8,OCTOBER:9,NOVEMBER:10,DECEMBER:11};
- const m=months[month.toUpperCase()]; if(m===undefined)return null;
- const d=new Date(Number(year),m,Number(day),23,59,59); return Number.isNaN(d.getTime())?null:d;
-}
-function getStatus(record){
- const raw=normalize(record['STATUS']).toUpperCase();
- if(raw==='INACTIVE')return'inactive';
- const expiration=parseDate(record); if(expiration&&expiration<new Date())return'expired';
- if(raw==='ACTIVE')return'active'; return'invalid';
-}
-
-function showResult(data,requestedControl){
- resultCard.classList.remove('hidden'); const record=data.record||{};
- if(!data.verified){statusBadge.className='status-badge status-invalid';statusBadge.textContent='INVALID ID';resultTitle.textContent='ID Not Found';resultMessage.textContent=`No record was found for control number ${requestedControl}.`;details.innerHTML='';return;}
- const map={active:['status-active','VALID / VERIFIED','This ID is active and verified.'],inactive:['status-inactive','INACTIVE ID','This ID is currently marked inactive.'],expired:['status-expired','EXPIRED ID','The expiration date has already passed.'],invalid:['status-invalid','INVALID ID','The record status could not be verified.']};
- const [cls,label,message]=map[getStatus(record)]||map.invalid;
- statusBadge.className=`status-badge ${cls}`;statusBadge.textContent=label;resultTitle.textContent='Verification Result';resultMessage.textContent=message;
- const name=[record['FIRST NAME'],record['MIDDLE NAME'],record['SURE NAME']||record['SURNAME']].map(normalize).filter(Boolean).join(' ');
- const acquired=[record['DATE ACQUIRED MONTH'],record['DATE ACQUIRED DAY'],record['DATE ACQUIRED YEAR']].map(normalize).filter(Boolean).join(' ');
- const expiration=[record['EXPIRATION DATE MONTH'],record['EXPIRATION DATE DAY'],record['EXPIRATION DATE YEAR']].map(normalize).filter(Boolean).join(' ');
- const fields=[['Control Number',record['CONTROL NUMBER']],['Name',name],['Designation',record['DESIGNATION']],['Date Acquired',acquired],['Expiration Date',expiration],['Database Status',record['STATUS']]];
- details.innerHTML=fields.map(([label,value])=>`<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(normalize(value)||'—')}</dd></div>`).join('');
-}
-
-async function verify(control){
- const value=normalize(control); if(!value){controlInput.focus();return;}
- resultCard.classList.remove('hidden');statusBadge.className='status-badge';statusBadge.textContent='CHECKING…';resultTitle.textContent='Verifying ID';resultMessage.textContent='Connecting to the official verification database…';details.innerHTML='';
- try{
-  const response=await fetch(`${API_URL}?control=${encodeURIComponent(value)}&t=${Date.now()}`,{cache:'no-store'});
-  if(!response.ok)throw new Error(`Verification server returned ${response.status}.`);
-  const data=await response.json(); if(!data||(!data.success&&!data.verified))throw new Error(data?.message||'Verification service error.');
-  showResult(data,value);
- }catch(error){statusBadge.className='status-badge status-invalid';statusBadge.textContent='ERROR';resultTitle.textContent='Verification Unavailable';resultMessage.textContent=error?.message||'Unable to connect to the verification database. Please try again.';details.innerHTML='';console.error('Verification error:',error);}
-}
-
-function extractControl(text){
- const value=normalize(text); if(!value)return'';
- try{const url=new URL(value);const control=url.searchParams.get('control')||url.searchParams.get('CONTROL')||url.searchParams.get('control_number')||url.searchParams.get('id');if(control)return normalize(control);}catch(_){ }
- const match=value.match(/(?:CONTROL(?:\s+NUMBER)?|ID)\s*[:#=\-]?\s*([A-Za-z0-9\-]+)/i); return match?.[1]?normalize(match[1]):value;
-}
-
-function cameraErrorMessage(error){
- const name=error?.name||'';
- if(name==='NotAllowedError'||name==='PermissionDeniedError')return'Camera permission was denied. Allow camera access in your browser settings, then tap Scan QR Code again.';
- if(name==='NotFoundError'||name==='DevicesNotFoundError')return'No camera was found on this device.';
- if(name==='NotReadableError'||name==='TrackStartError')return'The camera is currently being used by another app. Close Camera, Messenger, Meet, Zoom, or another camera app and try again.';
- if(name==='SecurityError')return'Camera access requires HTTPS. Open the website using its HTTPS address.';
- if(name==='NotSupportedError')return'This browser does not support camera scanning.';
- return'Unable to start the camera. '+(error?.message||'Please check camera permission and try again.');
-}
-
-async function startScanner(){
- if(scannerRunning)return;
- scanLocked=false;scannerCard.classList.remove('hidden');scannerMessage.textContent='Starting camera…';
- try{
-  if(!window.isSecureContext)throw new DOMException('HTTPS is required.','SecurityError');
-  if(!navigator.mediaDevices?.getUserMedia)throw new DOMException('Camera API unavailable.','NotSupportedError');
-  if(!window.Html5Qrcode){scannerMessage.textContent='QR scanner is still loading. Please wait a moment and try again.';return;}
-  if(!scanner)scanner=new Html5Qrcode('reader');
-  await scanner.start({facingMode:'environment'},{fps:10,qrbox:(w,h)=>{const size=Math.min(Math.max(Math.min(w,h)*.68,220),320);return{width:size,height:size};},aspectRatio:1,rememberLastUsedCamera:true,showTorchButtonIfSupported:true},async(decodedText)=>{
-   if(scanLocked||!scannerRunning)return; scanLocked=true;scannerMessage.textContent='QR code detected. Verifying…';
-   const control=extractControl(decodedText); if(!control){scanLocked=false;scannerMessage.textContent='QR code detected, but no Control Number was found. Try again.';return;}
-   controlInput.value=control;await stopScanner();await verify(control);
-  },()=>{});
-  scannerRunning=true;scannerMessage.textContent='Point the rear camera at the QR code on the ID.';
- }catch(error){scannerRunning=false;scannerMessage.textContent=cameraErrorMessage(error);console.error('Scanner error:',error);}
-}
-
-async function stopScanner(){
- scannerRunning=false;scanLocked=true;
- if(scanner){try{const state=scanner.getState?.();if(state===2||state===3)await scanner.stop();}catch(error){console.warn('Scanner stop warning:',error);}}
- scannerCard.classList.add('hidden');
-}
-
-searchForm.addEventListener('submit',async e=>{e.preventDefault();await stopScanner();await verify(controlInput.value);});
-scanBtn.addEventListener('click',startScanner);closeScanner.addEventListener('click',stopScanner);
-verifyAnother.addEventListener('click',async()=>{await stopScanner();resultCard.classList.add('hidden');controlInput.value='';controlInput.focus();});
-window.addEventListener('beforeunload',()=>{if(scanner){try{scanner.stop();}catch(_){}}});
-
-const initialControl=new URLSearchParams(location.search).get('control');
-if(initialControl){controlInput.value=normalize(initialControl);verify(initialControl);}
+function parseDate(r){const m0=normalize(r['EXPIRATION DATE MONTH']||r['EXPIRATION MONTH']),d0=normalize(r['EXPIRATION DATE DAY']||r['EXPIRATION DAY']),y0=normalize(r['EXPIRATION DATE YEAR']||r['EXPIRATION YEAR']);if(!m0||!d0||!y0)return null;const months={JANUARY:0,FEBRUARY:1,MARCH:2,APRIL:3,MAY:4,JUNE:5,JULY:6,AUGUST:7,SEPTEMBER:8,OCTOBER:9,NOVEMBER:10,DECEMBER:11},m=months[m0.toUpperCase()];if(m===undefined)return null;const d=new Date(Number(y0),m,Number(d0),23,59,59);return Number.isNaN(d.getTime())?null:d;}
+function getStatus(r){const s=normalize(r['STATUS']).toUpperCase();if(s==='INACTIVE')return'inactive';const e=parseDate(r);if(e&&e<new Date())return'expired';if(s==='ACTIVE')return'active';return'invalid';}
+function showResult(data,requested){resultCard.classList.remove('hidden');const r=data.record||{};if(!data.verified){statusBadge.className='status-badge status-invalid';statusBadge.textContent='INVALID ID';resultTitle.textContent='ID Not Found';resultMessage.textContent=`No record was found for control number ${requested}.`;details.innerHTML='';return;}const map={active:['status-active','VALID / VERIFIED','This ID is active and verified.'],inactive:['status-inactive','INACTIVE ID','This ID is currently marked inactive.'],expired:['status-expired','EXPIRED ID','The expiration date has already passed.'],invalid:['status-invalid','INVALID ID','The record status could not be verified.']};const [cls,label,msg]=map[getStatus(r)]||map.invalid;statusBadge.className=`status-badge ${cls}`;statusBadge.textContent=label;resultTitle.textContent='Verification Result';resultMessage.textContent=msg;const name=[r['FIRST NAME'],r['MIDDLE NAME'],r['SURE NAME']||r['SURNAME']].map(normalize).filter(Boolean).join(' '),acq=[r['DATE ACQUIRED MONTH'],r['DATE ACQUIRED DAY'],r['DATE ACQUIRED YEAR']].map(normalize).filter(Boolean).join(' '),exp=[r['EXPIRATION DATE MONTH'],r['EXPIRATION DATE DAY'],r['EXPIRATION DATE YEAR']].map(normalize).filter(Boolean).join(' ');const fields=[['Control Number',r['CONTROL NUMBER']],['Name',name],['Designation',r['DESIGNATION']],['Date Acquired',acq],['Expiration Date',exp],['Database Status',r['STATUS']]];details.innerHTML=fields.map(([l,v])=>`<div><dt>${escapeHtml(l)}</dt><dd>${escapeHtml(normalize(v)||'—')}</dd></div>`).join('');}
+async function verify(control){const v=normalize(control);if(!v){controlInput.focus();return;}resultCard.classList.remove('hidden');statusBadge.className='status-badge';statusBadge.textContent='CHECKING…';resultTitle.textContent='Verifying ID';resultMessage.textContent='Connecting to the official verification database…';details.innerHTML='';try{const res=await fetch(`${API_URL}?control=${encodeURIComponent(v)}&t=${Date.now()}`,{cache:'no-store'});if(!res.ok)throw new Error(`Verification server returned ${res.status}.`);const data=await res.json();if(!data||(!data.success&&!data.verified))throw new Error(data?.message||'Verification service error.');showResult(data,v);}catch(e){statusBadge.className='status-badge status-invalid';statusBadge.textContent='ERROR';resultTitle.textContent='Verification Unavailable';resultMessage.textContent=e?.message||'Unable to connect to the verification database.';details.innerHTML='';console.error(e);}}
+function extractControl(text){const v=normalize(text);if(!v)return'';try{const u=new URL(v);const c=u.searchParams.get('control')||u.searchParams.get('CONTROL')||u.searchParams.get('control_number')||u.searchParams.get('id');if(c)return normalize(c);}catch(_){}const m=v.match(/(?:CONTROL(?:\s+NUMBER)?|ID)\s*[:#=\-]?\s*([A-Za-z0-9\-]+)/i);return m?.[1]?normalize(m[1]):v;}
+function cameraError(e){const n=e?.name||'';if(n==='NotAllowedError'||n==='PermissionDeniedError')return'Camera permission was denied. Tap the camera icon beside the address bar and choose Allow, then tap Scan again.';if(n==='NotFoundError'||n==='DevicesNotFoundError')return'No camera was found on this device.';if(n==='NotReadableError'||n==='TrackStartError')return'The camera is busy. Close another app using the camera and try again.';if(n==='SecurityError')return'Camera access requires HTTPS. Open the live site using its HTTPS address.';if(n==='NotSupportedError')return'This browser does not support camera access.';return`Unable to start camera (${n||'Unknown error'}). ${e?.message||''}`;}
+async function startScanner(){if(scannerRunning)return;scanLocked=false;scannerCard.classList.remove('hidden');scannerMessage.textContent='Opening camera…';try{if(!window.isSecureContext)throw new DOMException('HTTPS is required.','SecurityError');if(!navigator.mediaDevices?.getUserMedia)throw new DOMException('Camera API unavailable.','NotSupportedError');cameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false});video.srcObject=cameraStream;await video.play();scannerRunning=true;scannerMessage.textContent='Camera is ready. Point it at the QR code.';startDetection();}catch(e){scannerRunning=false;scannerMessage.textContent=cameraError(e);console.error('Camera error:',e);}}
+function startDetection(){if('BarcodeDetector' in window){try{barcodeDetector=new BarcodeDetector({formats:['qr_code']});detectNative();return;}catch(e){console.warn('BarcodeDetector unavailable',e);}}startHtml5Fallback();}
+async function detectNative(){if(!scannerRunning||scanLocked||!barcodeDetector)return;try{const codes=await barcodeDetector.detect(video);if(codes.length){const control=extractControl(codes[0].rawValue);if(control){scanLocked=true;scannerMessage.textContent='QR code detected. Verifying…';controlInput.value=control;await stopScanner();await verify(control);return;}}}catch(e){console.warn('QR detection:',e);}detectorTimer=setTimeout(detectNative,250);}
+async function startHtml5Fallback(){if(!window.Html5Qrcode){scannerMessage.textContent='Camera is active. QR detection is unavailable in this browser; enter the Control Number below.';return;}try{scannerFallback=new Html5Qrcode('reader');await scannerFallback.start({facingMode:'environment'},{fps:10,qrbox:{width:250,height:250}},async(text)=>{if(scanLocked)return;scanLocked=true;const control=extractControl(text);if(control){controlInput.value=control;await stopScanner();await verify(control);}},()=>{});}catch(e){console.warn('QR fallback:',e);if(scannerRunning)scannerMessage.textContent='Camera is active. Point it at the QR code or enter the Control Number manually.';}}
+async function stopScanner(){scannerRunning=false;scanLocked=true;if(detectorTimer){clearTimeout(detectorTimer);detectorTimer=null;}if(scannerFallback){try{await scannerFallback.stop();}catch(_){}try{scannerFallback.clear();}catch(_){}scannerFallback=null;}if(cameraStream){cameraStream.getTracks().forEach(t=>t.stop());cameraStream=null;}if(video)video.srcObject=null;scannerCard.classList.add('hidden');}
+searchForm.addEventListener('submit',async e=>{e.preventDefault();await stopScanner();await verify(controlInput.value);});scanBtn.addEventListener('click',startScanner);closeScanner.addEventListener('click',stopScanner);verifyAnother.addEventListener('click',async()=>{await stopScanner();resultCard.classList.add('hidden');controlInput.value='';controlInput.focus();});window.addEventListener('beforeunload',()=>{if(cameraStream)cameraStream.getTracks().forEach(t=>t.stop());});const initial=new URLSearchParams(location.search).get('control');if(initial){controlInput.value=normalize(initial);verify(initial);}
