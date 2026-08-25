@@ -102,47 +102,64 @@ async function verify(control){
 function cameraErrorMessage(error){
   const name=error?.name||'UnknownError';
   if(name==='NotAllowedError'||name==='PermissionDeniedError'){
-    return 'Camera permission is blocked. In Chrome, open the site settings from the address bar → Camera → Allow, then reload this page.';
+    return 'Camera permission is blocked. Use the camera icon beside the address bar → Allow Camera, then reload the page.';
   }
   if(name==='NotFoundError'||name==='DevicesNotFoundError'){
-    return 'No camera was found. Check that your phone/laptop has a camera available.';
+    return 'No camera was found on this device.';
   }
   if(name==='NotReadableError'||name==='TrackStartError'){
-    return 'The camera is busy or unavailable. Close Zoom, Meet, Messenger, Camera, or other apps using the camera, then try again.';
+    return 'The camera is busy. Close Zoom, Meet, Messenger, Camera, or another app using the camera, then try again.';
   }
   if(name==='SecurityError'){
-    return 'The browser blocked camera access for security reasons. Open this site directly over HTTPS in Chrome.';
+    return 'Camera access was blocked for security. Open this page directly using HTTPS in Chrome.';
   }
   if(name==='AbortError'){
-    return 'Camera startup was interrupted. Close other camera apps and tap Scan again.';
+    return 'Camera startup was interrupted. Tap Scan again.';
   }
-  return `Camera could not start (${name}). ${error?.message||'Check the browser camera permission and try again.'}`;
+  return `Camera could not start (${name}). ${error?.message||'Check camera permissions and try again.'}`;
+}
+
+async function requestCamera(){
+  // This function is called directly from the Scan button click.
+  // It deliberately requests the camera before the QR library starts so
+  // Chrome/Android can display its native permission prompt.
+  if(!window.isSecureContext) throw new DOMException('HTTPS is required','SecurityError');
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    throw new DOMException('Camera API is unavailable','NotSupportedError');
+  }
+
+  let permissionState='unknown';
+  try{
+    const permission=await navigator.permissions?.query({name:'camera'});
+    permissionState=permission?.state||'unknown';
+  }catch(_){ }
+
+  if(permissionState==='denied'){
+    throw new DOMException('Camera permission is blocked by the browser','NotAllowedError');
+  }
+
+  return navigator.mediaDevices.getUserMedia({
+    video:{facingMode:{ideal:'environment'}},
+    audio:false
+  });
 }
 
 async function startScanner(){
   scannerCard.classList.remove('hidden');
   scannerMessage.textContent='Requesting camera permission…';
 
-  if(!window.isSecureContext){
-    scannerMessage.textContent='Camera requires HTTPS. Open the GitHub Pages link directly in Chrome.';
-    return;
-  }
-  if(!navigator.mediaDevices?.getUserMedia){
-    scannerMessage.textContent='This browser does not support camera access.';
-    return;
-  }
-  if(!window.Html5Qrcode){
-    scannerMessage.textContent='QR scanner is still loading. Please wait a moment and tap Scan again.';
-    return;
-  }
-
-  scanner=scanner||new Html5Qrcode('reader');
   try{
-    // This explicit request is intentionally inside the Scan button click.
-    // Chrome/Android can show its native camera permission prompt here.
-    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+    // First request is made immediately from the user's Scan button action.
+    // Do not wait for or depend on the QR library for permission.
+    const stream=await requestCamera();
     stream.getTracks().forEach(track=>track.stop());
 
+    if(!window.Html5Qrcode){
+      scannerMessage.textContent='QR scanner is still loading. Please wait a moment and tap Scan again.';
+      return;
+    }
+
+    scanner=scanner||new Html5Qrcode('reader');
     await scanner.start(
       {facingMode:{ideal:'environment'}},
       {fps:10,qrbox:{width:250,height:250}},
@@ -157,7 +174,7 @@ async function startScanner(){
       ()=>{}
     );
     scannerRunning=true;
-    scannerMessage.textContent='Point the rear camera at the ID QR code.';
+    scannerMessage.textContent='Point the camera at the ID QR code.';
   }catch(error){
     scannerMessage.textContent=cameraErrorMessage(error);
     console.error('Camera error:',error);
@@ -165,7 +182,11 @@ async function startScanner(){
 }
 
 function extractControl(text){
-  try{const url=new URL(text);const control=url.searchParams.get('control');if(control)return control}catch(_){ }
+  try{
+    const url=new URL(text);
+    const control=url.searchParams.get('control');
+    if(control)return control;
+  }catch(_){ }
   return normalize(text);
 }
 
