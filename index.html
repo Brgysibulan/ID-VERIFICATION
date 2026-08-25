@@ -1,54 +1,56 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#0b6b45">
-  <meta name="description" content="QR-based ID verification system">
-  <title>ID Verification System</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#083820">
+<title>Barangay ID Verification</title>
+<meta name="description" content="Official Barangay ID verification portal.">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main class="app-shell">
-    <header class="hero">
-      <div class="brand-mark">ID</div>
-      <div>
-        <p class="eyebrow">OFFICIAL VERIFICATION</p>
-        <h1>ID Verification</h1>
-        <p class="subtitle">Scan a QR code or enter a control number to verify an ID.</p>
-      </div>
-    </header>
-
-    <section class="card actions-card">
-      <button id="scanBtn" class="primary-btn" type="button">📷 Scan QR Code</button>
-      <div class="divider"><span>OR</span></div>
-      <form id="searchForm" class="search-form">
-        <label for="controlInput">Control Number</label>
-        <div class="search-row">
-          <input id="controlInput" name="control" inputmode="numeric" autocomplete="off" placeholder="e.g. 2026004" required>
-          <button class="search-btn" type="submit">Search</button>
-        </div>
-      </form>
-    </section>
-
-    <section id="scannerCard" class="card scanner-card hidden">
-      <div id="reader"></div>
-      <button id="closeScanner" class="secondary-btn" type="button">Close Scanner</button>
-      <p id="scannerMessage" class="muted">Allow camera access when your browser asks.</p>
-    </section>
-
-    <section id="resultCard" class="card result-card hidden" aria-live="polite">
-      <div id="statusBadge" class="status-badge"></div>
-      <h2 id="resultTitle">Verification Result</h2>
-      <p id="resultMessage" class="muted"></p>
-      <dl id="details" class="details"></dl>
-      <button id="verifyAnother" class="secondary-btn" type="button">Verify Another ID</button>
-    </section>
-
-    <p class="footer-note">Verification results are retrieved from the official verification database.</p>
-  </main>
-
-  <script src="https://unpkg.com/html5-qrcode" defer></script>
-  <script src="app.js" defer></script>
+<div class="utility-bar"><div>OFFICIAL ID VERIFICATION PORTAL</div></div>
+<header class="site-header">
+  <div class="nav-inner">
+    <a class="brand" href="./">
+      <img src="https://gykvqxmrtyrjixncumxv.supabase.co/storage/v1/object/public/website-assets/logo/SIBULANLOGO.jpg" alt="Official barangay logo">
+      <div><strong>Barangay ID</strong><span>Verification System</span></div>
+    </a>
+    <a class="home-btn" href="https://brgysibulan.github.io/barangay-sibulan-id-verification/">Main Website</a>
+  </div>
+</header>
+<div class="gold-line"></div>
+<main>
+<section class="hero">
+  <div class="hero-inner">
+    <div class="hero-copy">
+      <div class="eyebrow">SECURE DIGITAL SERVICE</div>
+      <h1>Verify a <span>Barangay ID</span></h1>
+      <p>Check the current status of an ID using the Control Number printed on the card, or scan its QR code using your phone.</p>
+    </div>
+    <div class="logo-card"><img src="https://gykvqxmrtyrjixncumxv.supabase.co/storage/v1/object/public/website-assets/logo/SIBULANLOGO.jpg" alt="Official logo"></div>
+  </div>
+</section>
+<section class="verify-wrap">
+  <div class="verify-card">
+    <div class="card-heading"><div><div class="eyebrow dark">ID VERIFICATION</div><h2>Check ID Status</h2></div><span class="secure-pill">SECURE</span></div>
+    <button id="scanBtn" class="scan-btn" type="button">📷 Scan QR Code</button>
+    <div class="or"><span>OR SEARCH BY CONTROL NUMBER</span></div>
+    <form id="searchForm">
+      <label for="controlInput">Control Number</label>
+      <div class="search-row"><input id="controlInput" name="control" inputmode="numeric" autocomplete="off" placeholder="Enter Control Number e.g. 2026004" required><button class="verify-btn" type="submit">Verify ID</button></div>
+    </form>
+    <p class="hint">Example: <button id="sampleBtn" type="button" class="link-btn">2026004</button></p>
+  </div>
+  <div id="scannerCard" class="verify-card scanner-card hidden"><div id="reader"></div><button id="closeScanner" class="secondary-btn" type="button">Close Scanner</button><p id="scannerMessage">Allow camera access when your browser asks.</p></div>
+  <div id="resultCard" class="verify-card hidden" aria-live="polite">
+    <div id="statusBadge" class="status-badge"></div><h2 id="resultTitle">Verification Result</h2><p id="resultMessage" class="result-message"></p><dl id="details" class="details"></dl><button id="verifyAnother" class="secondary-btn" type="button">Verify Another ID</button>
+  </div>
+</section>
+<section class="info-strip"><div><strong>Live Database</strong><span>Results are retrieved directly from the verification system.</span></div><div><strong>QR Ready</strong><span>Scan an ID QR code to open its verification record.</span></div><div><strong>Status Check</strong><span>Active, Inactive, Expired and Invalid results are identified.</span></div></section>
+</main>
+<footer><div><strong>Barangay ID Verification System</strong><span>Official digital verification service</span></div><small>© 2026 Barangay Sibulan</small></footer>
+<script src="https://unpkg.com/html5-qrcode" defer></script>
+<script src="app.js" defer></script>
 </body>
 </html>
