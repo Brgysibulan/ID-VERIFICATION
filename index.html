@@ -22,33 +22,37 @@
     <div class="hero-inner">
       <div class="eyebrow">SECURE DIGITAL SERVICE</div>
       <h1>Verify Your ID</h1>
-      <p>Enter the Control Number printed on the ID or scan its QR code.</p>
+      <p>Scan the QR code on the ID or enter its Control Number.</p>
     </div>
   </section>
 
   <section class="verify-wrap">
     <div class="verify-card">
-      <h2>Verify ID</h2>
-      <p class="subtext">Use either method below.</p>
-
-      <button id="scanBtn" class="scan-btn" type="button">📷 Scan QR Code</button>
+      <div class="method-block">
+        <div class="method-icon">▣</div>
+        <h2>Scan QR Code</h2>
+        <p class="subtext">Scan the QR code printed on the ID.</p>
+        <button id="scanBtn" class="scan-btn" type="button">📷&nbsp; Scan QR Code</button>
+      </div>
 
       <div class="divider"><span>OR</span></div>
 
-      <form id="searchForm">
-        <label for="controlInput">Control Number</label>
-        <div class="search-row">
-          <input id="controlInput" name="control" inputmode="numeric" autocomplete="off" placeholder="e.g. 2026004" required>
-          <button class="verify-btn" type="submit">VERIFY</button>
-        </div>
-      </form>
-      <button id="sampleBtn" class="sample-btn" type="button">Test 2026004</button>
+      <div class="method-block">
+        <div class="method-icon search-icon">⌕</div>
+        <h2>Enter Control Number</h2>
+        <p class="subtext">Enter the Control Number of the ID to verify.</p>
+        <form id="searchForm">
+          <label class="sr-only" for="controlInput">Control Number</label>
+          <input id="controlInput" name="control" inputmode="numeric" autocomplete="off" placeholder="Enter control number" required>
+          <button class="verify-btn" type="submit">✓&nbsp; VERIFY ID</button>
+        </form>
+      </div>
     </div>
 
     <div id="scannerCard" class="verify-card scanner-card hidden">
       <div id="reader"></div>
       <p id="scannerMessage">Allow camera access when asked.</p>
-      <button id="closeScanner" class="secondary-btn" type="button">Close</button>
+      <button id="closeScanner" class="secondary-btn" type="button">Close Scanner</button>
     </div>
 
     <div id="resultCard" class="verify-card hidden" aria-live="polite">
