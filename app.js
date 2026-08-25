@@ -3,7 +3,6 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbzFOY5ul78Q-VOrb_-eXUKj
 const $ = (id) => document.getElementById(id);
 const searchForm = $('searchForm');
 const controlInput = $('controlInput');
-const sampleBtn = $('sampleBtn');
 const scanBtn = $('scanBtn');
 const scannerCard = $('scannerCard');
 const closeScanner = $('closeScanner');
@@ -38,7 +37,7 @@ function getStatus(record){
   const expiration=parseDate(record);
   if(expiration&&expiration<new Date())return 'expired';
   if(raw==='ACTIVE')return 'active';
-  return raw?'invalid':'invalid';
+  return 'invalid';
 }
 
 function showResult(data,requestedControl){
@@ -102,21 +101,49 @@ async function verify(control){
 
 async function startScanner(){
   scannerCard.classList.remove('hidden');
-  scannerMessage.textContent='Starting camera…';
-  if(!window.Html5Qrcode){scannerMessage.textContent='QR scanner is still loading. Try again in a moment.';return}
+  scannerMessage.textContent='Requesting camera access…';
+
+  if(!window.isSecureContext){
+    scannerMessage.textContent='Camera requires HTTPS. Open the GitHub Pages link directly in Chrome.';
+    return;
+  }
+  if(!navigator.mediaDevices?.getUserMedia){
+    scannerMessage.textContent='This browser does not support camera access.';
+    return;
+  }
+  if(!window.Html5Qrcode){
+    scannerMessage.textContent='QR scanner is still loading. Please tap Scan again.';
+    return;
+  }
+
+  try{
+    const permissionStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});
+    permissionStream.getTracks().forEach(track=>track.stop());
+  }catch(error){
+    scannerMessage.textContent='Camera permission was denied. Allow Camera for this site in Chrome settings, then try again.';
+    return;
+  }
+
   scanner=scanner||new Html5Qrcode('reader');
   try{
-    await scanner.start({facingMode:'environment'},{fps:10,qrbox:{width:250,height:250}},async(decodedText)=>{
-      if(!scannerRunning)return;
-      scannerRunning=false;
-      const value=extractControl(decodedText);
-      await stopScanner();
-      controlInput.value=value;
-      await verify(value);
-    },()=>{});
+    await scanner.start(
+      {facingMode:{ideal:'environment'}},
+      {fps:10,qrbox:{width:250,height:250}},
+      async(decodedText)=>{
+        if(!scannerRunning)return;
+        scannerRunning=false;
+        const value=extractControl(decodedText);
+        await stopScanner();
+        controlInput.value=value;
+        await verify(value);
+      },
+      ()=>{}
+    );
     scannerRunning=true;
-    scannerMessage.textContent='Point the camera at the ID QR code.';
-  }catch(error){scannerMessage.textContent='Camera could not start. Check browser camera permission.'}
+    scannerMessage.textContent='Point the rear camera at the ID QR code.';
+  }catch(error){
+    scannerMessage.textContent='Camera could not start. Allow camera permission for this site and try again.';
+  }
 }
 
 function extractControl(text){
@@ -125,13 +152,12 @@ function extractControl(text){
 }
 
 async function stopScanner(){
-  if(scanner&&scannerRunning){try{await scanner.stop()}catch(_){}}
+  if(scanner){try{await scanner.stop()}catch(_){}}
   scannerRunning=false;
   scannerCard.classList.add('hidden');
 }
 
 searchForm.addEventListener('submit',event=>{event.preventDefault();verify(controlInput.value)});
-sampleBtn.addEventListener('click',()=>{controlInput.value='2026004';verify('2026004')});
 scanBtn.addEventListener('click',startScanner);
 closeScanner.addEventListener('click',stopScanner);
 verifyAnother.addEventListener('click',()=>{resultCard.classList.add('hidden');controlInput.focus()});
