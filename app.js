@@ -101,7 +101,7 @@ async function verify(control){
 
 async function startScanner(){
   scannerCard.classList.remove('hidden');
-  scannerMessage.textContent='Requesting camera access…';
+  scannerMessage.textContent='Allow camera access when the browser asks.';
 
   if(!window.isSecureContext){
     scannerMessage.textContent='Camera requires HTTPS. Open the GitHub Pages link directly in Chrome.';
@@ -116,16 +116,13 @@ async function startScanner(){
     return;
   }
 
-  try{
-    const permissionStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});
-    permissionStream.getTracks().forEach(track=>track.stop());
-  }catch(error){
-    scannerMessage.textContent='Camera permission was denied. Allow Camera for this site in Chrome settings, then try again.';
-    return;
-  }
-
   scanner=scanner||new Html5Qrcode('reader');
   try{
+    // Calling getUserMedia directly here makes Chrome show its native
+    // "Allow camera" permission prompt when permission has not been set.
+    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});
+    stream.getTracks().forEach(track=>track.stop());
+
     await scanner.start(
       {facingMode:{ideal:'environment'}},
       {fps:10,qrbox:{width:250,height:250}},
@@ -142,7 +139,13 @@ async function startScanner(){
     scannerRunning=true;
     scannerMessage.textContent='Point the rear camera at the ID QR code.';
   }catch(error){
-    scannerMessage.textContent='Camera could not start. Allow camera permission for this site and try again.';
+    if(error?.name==='NotAllowedError'){
+      scannerMessage.textContent='Camera access was blocked. Tap the camera icon in Chrome address bar → Allow, then tap Scan again.';
+    }else if(error?.name==='NotFoundError'){
+      scannerMessage.textContent='No camera was found on this device.';
+    }else{
+      scannerMessage.textContent='Camera could not start. Allow camera access for this site and try again.';
+    }
   }
 }
 
@@ -152,7 +155,7 @@ function extractControl(text){
 }
 
 async function stopScanner(){
-  if(scanner){try{await scanner.stop()}catch(_){}}
+  if(scanner){try{await scanner.stop()}catch(_){} }
   scannerRunning=false;
   scannerCard.classList.add('hidden');
 }
