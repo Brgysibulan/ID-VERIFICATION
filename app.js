@@ -1,4 +1,4 @@
-const API_URL='https://script.google.com/macros/s/AKfycbwdRNJtcLirBBoSVQnwAGont0-E96Pp5MKU_vX331bRIoYAYNZ_xwRdrNGYWxtvGBMXpw/exec';
+const API_URL='https://script.google.com/macros/s/AKfycbzFOY5ul78Q-VOrb_-eXUKjiQdFvv1bckhJ-GQL3EqEB87KgyYHbPTguIX8OepgWUUKkg/exec';
 const $=id=>document.getElementById(id);
 const searchForm=$('searchForm'),controlInput=$('controlInput'),scanBtn=$('scanBtn'),scannerCard=$('scannerCard'),closeScanner=$('closeScanner'),scannerMessage=$('scannerMessage'),resultCard=$('resultCard'),statusBadge=$('statusBadge'),resultTitle=$('resultTitle'),resultMessage=$('resultMessage'),details=$('details'),verifyAnother=$('verifyAnother'),video=$('cameraVideo');
 let cameraStream=null,scannerRunning=false,scanLocked=false,barcodeDetector=null,detectorTimer=null,scannerFallback=null;
